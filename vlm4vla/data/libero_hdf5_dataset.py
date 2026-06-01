@@ -57,7 +57,8 @@ class LiberoHDF5Dataset(IterableDataset):
             raise FileNotFoundError(
                 f"Stats cache missing: {stats_path}. Run "
                 f"tools/compute_libero_stats.py --suite {self.suite} first.")
-        s = json.load(open(stats_path))["action"]
+        with open(stats_path) as f:
+            s = json.load(f)["action"]
         self.q01 = np.array(s["q01"], dtype=np.float64)
         self.q99 = np.array(s["q99"], dtype=np.float64)
         self.norm_mask = np.array(s["mask"], dtype=bool)

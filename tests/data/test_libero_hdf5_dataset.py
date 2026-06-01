@@ -1,8 +1,10 @@
+from pathlib import Path
+
 import numpy as np
 from vlm4vla.data.libero_hdf5_dataset import LiberoHDF5Dataset
 
 DATA_ROOT = "/workspace/tingting/LIBERO/libero/datasets"
-STATS = "vlm4vla/data/libero_stats/libero_10.json"
+STATS = str(Path(__file__).resolve().parents[2] / "vlm4vla/data/libero_stats/libero_10.json")
 
 
 def _ds(**kw):
