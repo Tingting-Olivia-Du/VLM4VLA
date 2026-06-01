@@ -25,7 +25,9 @@ def test_noop_mask_flags_near_zero_frames():
 
 
 def test_normalize_q99_maps_to_unit_range_and_skips_masked_dim():
-    actions = np.array([[-2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+    # dim 1: value at q99 bound (1.0) should map to exactly 1.0;
+    #         midpoint value (0.0) with q01=-1,q99=1 maps to 0.0.
+    actions = np.array([[-2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
                         [ 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]], dtype=np.float64)
     q01 = np.array([-2, -1, -1, -1, -1, -1, 0], dtype=np.float64)
     q99 = np.array([ 2,  1,  1,  1,  1,  1, 1], dtype=np.float64)
@@ -33,5 +35,24 @@ def test_normalize_q99_maps_to_unit_range_and_skips_masked_dim():
     out = normalize_q99(actions, q01, q99, mask)
     # dim0: -2->-1, 2->1
     np.testing.assert_allclose(out[:, 0], [-1.0, 1.0])
+    # dim1 exercises non-gripper path: q99 bound 1.0 -> 1.0; midpoint 0.0 -> 0.0
+    np.testing.assert_allclose(out[0, 1], 1.0)   # at q99 bound
+    np.testing.assert_allclose(out[1, 1], 0.0)   # midpoint (q01+q99)/2
     # gripper dim (masked) unchanged
     np.testing.assert_allclose(out[:, 6], [1.0, 0.0])
+
+
+def test_normalize_q99_handles_zero_range_denominator():
+    # dim 2 has q99 == q01 (zero range); implementation substitutes denom=1.0 and clips.
+    # The output for that dim must be finite and clipped into [-1, 1].
+    actions = np.array([[0.0, 0.5, 999.0, 0.0, 0.0, 0.0, 1.0],
+                        [0.0, 0.5, -999.0, 0.0, 0.0, 0.0, 0.0]], dtype=np.float64)
+    q01 = np.array([0.0, -1.0, 0.5, -1.0, -1.0, -1.0, 0.0], dtype=np.float64)
+    q99 = np.array([0.0,  1.0, 0.5,  1.0,  1.0,  1.0, 1.0], dtype=np.float64)
+    mask = np.ones(7, dtype=bool)
+    mask[6] = False  # gripper unnormalized
+    # Must not raise and must not produce inf or nan
+    out = normalize_q99(actions, q01, q99, mask)
+    assert np.isfinite(out).all(), "normalize_q99 produced inf/nan for zero-range dim"
+    # dim 2 output must be clipped into [-1, 1]
+    assert np.all(out[:, 2] >= -1.0) and np.all(out[:, 2] <= 1.0)
