@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Iterator
 
 from vlm4vla.data.base_action_prediction_dataset import ActionPredictionDataset
 from vlm4vla.data.libero_hdf5_dataset import LiberoHDF5Dataset
@@ -12,19 +12,19 @@ class LiberoActionPredictionDataset(ActionPredictionDataset, LiberoHDF5Dataset):
     """
 
     def __init__(self, **kwargs):
-        self.kwargs = kwargs
         ActionPredictionDataset.__init__(self, **kwargs)
         if self.organize_type == "interleave":
             kwargs["window_sample"] = "sliding"
             kwargs["left_pad"] = False
         elif self.organize_type == "segment":
-            kwargs["window_sample"] = "range"
-            kwargs["left_pad"] = True
+            raise NotImplementedError(
+                "organize_type='segment' is not yet supported for LIBERO "
+                "(LiberoHDF5Dataset only implements sliding windows).")
         else:
             raise ValueError("organize type must be interleave or segment")
         LiberoHDF5Dataset.__init__(self, **kwargs)
 
-    def __iter__(self) -> Dict[str, Any]:
+    def __iter__(self) -> Iterator[Dict[str, Any]]:
         for item in LiberoHDF5Dataset.__iter__(self):
             yield self.batch_transform(
                 task_description=item["task_description"],
