@@ -11,7 +11,7 @@ def test_compute_stats_returns_q01_q99_and_gripper_mask():
     q01 = np.array(stats["action"]["q01"])
     q99 = np.array(stats["action"]["q99"])
     assert (q01 < q99).all()
-    # gripper dim (index 6) is masked False so Q99 skips it
+    # gripper dim (index 6) is mask=False so downstream normalize_q99 leaves it un-normalized
     assert stats["action"]["mask"][6] is False
     assert all(stats["action"]["mask"][:6])
     # round-trips through JSON

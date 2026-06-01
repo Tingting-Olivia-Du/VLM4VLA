@@ -43,6 +43,9 @@ def collect_suite_actions(data_root: str, suite: str) -> np.ndarray:
                 raw = raw[noop_mask(raw)]
                 if len(raw):
                     chunks.append(raw)
+    if not chunks:
+        raise ValueError(
+            f"No action frames remain after no-op filtering for suite '{suite}'")
     return np.concatenate(chunks, axis=0)
 
 
@@ -54,7 +57,9 @@ def main() -> None:
     a = p.parse_args()
     actions = collect_suite_actions(a.data_root, a.suite)
     stats = compute_stats_for_actions(actions)
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    out_dir = os.path.dirname(a.out)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(stats, f, indent=2)
     print(f"Wrote {a.out}  ({len(actions)} action frames)")
