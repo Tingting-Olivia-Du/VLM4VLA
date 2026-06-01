@@ -2,3 +2,6 @@
 __pycache__/
 *.egg-info/
 .vscode/
+
+# training artifacts (logs/checkpoints/wandb)
+runs/

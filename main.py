@@ -98,6 +98,8 @@ def init_trainer_config(configs):
         exp_name = "calvin_" + exp_name
     elif "libero" in configs["task_name"]:
         exp_name = configs["task_name"].split("_")[0] + "_" + exp_name
+    elif "vla_ablation" in configs["task_name"]:
+        exp_name = configs["task_name"] + "_" + exp_name
     elif configs["task_name"] == "realdualarm_finetune":
         exp_name = "realdualarm_" + exp_name
     elif configs["task_name"] == "b1k_finetune":
