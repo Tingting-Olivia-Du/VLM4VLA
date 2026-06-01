@@ -5,7 +5,7 @@ import os
 import lightning.pytorch as pl
 import torch
 from torch.utils.data.distributed import DistributedSampler
-from torch.utils.data import SequentialSampler, RandomSampler
+from torch.utils.data import SequentialSampler, RandomSampler, IterableDataset
 
 import vlm4vla
 from vlm4vla.utils.dist_train import get_rank, is_dist
@@ -124,7 +124,8 @@ class GRDataModule(pl.LightningDataModule):
         dataset_type = dataset_config["type"]
         assert isinstance(batch_size, int)
         assert isinstance(num_workers, int)
-        if "OpenVLA" in dataset_type:
+        dataset_cls = getattr(vlm4vla.data, dataset_type)
+        if issubclass(dataset_cls, IterableDataset):
             return self._init_iterable_dataset(
                 dataset_config,
                 is_training=is_training,
