@@ -728,9 +728,19 @@ git -C /workspace/tingting/3DBENCH commit -m "config(vla_ablation): roll TF-free
 
 ## Execution log
 
-(filled in during execution)
-
-- Task 7:
+- Tasks 1-6: DONE (TDD, all unit tests pass; reviewed spec + quality each).
+- Task 7 (e2e smoke): Data pipeline VERIFIED WORKING. Fixed two contract gaps found
+  during e2e: (a) datamodule routed datasets by name substring — changed to route by
+  `issubclass(IterableDataset)` (commit 5d7b4ff); (b) `_windows` span was W+N+1, must be
+  W+N to satisfy `convert_action`'s assert (commit d8081d6). After these, the run flows
+  cleanly: dataset instantiates, DataLoader yields batches, `batch_transform` succeeds,
+  tokenization + embedding succeed, data reaches the MODEL forward pass.
+  REMAINING BLOCKER (out of data-pipeline scope): model backbone
+  `roboqwen25vl.py:129` does `image_embeds.shape[0]` but `transformers 5.8.0`'s
+  Qwen2.5-VL vision tower returns `BaseModelOutputWithPooling` (not a raw tensor).
+  This is a transformers-version model-code incompatibility, independent of the data
+  pipeline (would affect the original TF pipeline identically). Needs a separate
+  decision (out of this plan's "model untouched" scope).
 - Task 8 Step 3:
 
 ---
