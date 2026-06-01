@@ -71,7 +71,10 @@ class LiberoHDF5Dataset(IterableDataset):
     # ---- window layer ----------------------------------------------------
     def _windows(self, traj: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
         W, N = self.window_size, self.fwd_pred_next_n
-        span = W + N + 1                      # +1: train path drops last action
+        # Yield W+N frames per window: convert_action drops the last (-> W+N-1,
+        # matching its assert) while convert_image consumes all W+N. Mirrors the
+        # original RLDS window (window_size + future_action_window).
+        span = W + N
         actions = traj["actions"]
         images = traj["images"]
         grip = traj["gripper_images"]

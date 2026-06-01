@@ -34,7 +34,7 @@ def test_iter_yields_windowed_5_fields():
     ds = _ds(window_size=1, fwd_pred_next_n=4)
     item = next(iter(ds))
     W, N = 1, 4
-    expected_len = W + N + 1  # batch_transform drops the last in train mode
+    expected_len = W + N  # 5 fields yielded at length W+N; convert_action drops one downstream
     assert isinstance(item["task_description"], str)
     assert item["action"].shape == (expected_len, 7)
     assert item["episode_mask"].shape == (expected_len,)
