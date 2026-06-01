@@ -45,6 +45,11 @@ class LiberoHDF5Dataset(IterableDataset):
         self.left_pad = left_pad
         self.train = train
 
+        if window_sample != "sliding":
+            raise NotImplementedError(
+                f"LiberoHDF5Dataset only supports window_sample='sliding', "
+                f"got {window_sample!r}.")
+
         suite_dir = os.path.join(data_root_dir, self.suite)
         self.files = sorted(glob.glob(os.path.join(suite_dir, "*.hdf5")))
         if not self.files:
@@ -71,11 +76,9 @@ class LiberoHDF5Dataset(IterableDataset):
         images = traj["images"]
         grip = traj["gripper_images"]
         T = len(actions)
-        for start in range(0, T):             # sliding, stride 1
+        for start in range(T):                # sliding, stride 1; start always valid
             idx = list(range(start, start + span))
             valid = [i for i in idx if i < T]
-            if not valid:
-                break
             # right-pad by repeating the last valid frame; mask marks padding
             pad = span - len(valid)
             sel = valid + [valid[-1]] * pad
@@ -91,6 +94,9 @@ class LiberoHDF5Dataset(IterableDataset):
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         rank, world = self._rank_world()
         flat = (w for traj in self.iter_trajectories() for w in self._windows(traj))
+        # Round-robin shard across ranks (mirrors RLDS _RLDSDatasetByRank).
+        # Shard sizes can differ by 1 across ranks; the trainer must use
+        # drop_last=True to avoid a DDP all-reduce hang on the ragged last step.
         for item in itertools.islice(flat, rank, None, world):
             yield item
 

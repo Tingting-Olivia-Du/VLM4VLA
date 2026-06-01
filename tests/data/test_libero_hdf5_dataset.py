@@ -42,3 +42,7 @@ def test_iter_yields_windowed_5_fields():
     assert item["images"].shape == (expected_len, 128, 128, 3)
     assert item["images"].dtype == np.uint8
     assert item["gripper_images"].shape == (expected_len, 128, 128, 3)
+
+    # first window starts at trajectory index 0
+    traj0 = next(_ds(window_size=1, fwd_pred_next_n=4).iter_trajectories())
+    np.testing.assert_array_equal(item["action"][0], traj0["actions"][0])
