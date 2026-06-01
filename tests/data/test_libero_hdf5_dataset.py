@@ -28,3 +28,17 @@ def test_iter_trajectories_yields_clean_fields():
     assert grip.shape == img.shape
     # actions and frames aligned in length
     assert len(a) == len(img) == len(grip)
+
+
+def test_iter_yields_windowed_5_fields():
+    ds = _ds(window_size=1, fwd_pred_next_n=4)
+    item = next(iter(ds))
+    W, N = 1, 4
+    expected_len = W + N + 1  # batch_transform drops the last in train mode
+    assert isinstance(item["task_description"], str)
+    assert item["action"].shape == (expected_len, 7)
+    assert item["episode_mask"].shape == (expected_len,)
+    assert set(np.unique(item["episode_mask"])).issubset({0, 1})
+    assert item["images"].shape == (expected_len, 128, 128, 3)
+    assert item["images"].dtype == np.uint8
+    assert item["gripper_images"].shape == (expected_len, 128, 128, 3)

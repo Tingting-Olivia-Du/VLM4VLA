@@ -63,9 +63,42 @@ class LiberoHDF5Dataset(IterableDataset):
         self.q99 = np.array(s["q99"], dtype=np.float64)
         self.norm_mask = np.array(s["mask"], dtype=bool)
 
-    # ---- windowing layer (implemented in Task 4) -------------------------
+    # ---- window layer ----------------------------------------------------
+    def _windows(self, traj: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+        W, N = self.window_size, self.fwd_pred_next_n
+        span = W + N + 1                      # +1: train path drops last action
+        actions = traj["actions"]
+        images = traj["images"]
+        grip = traj["gripper_images"]
+        T = len(actions)
+        for start in range(0, T):             # sliding, stride 1
+            idx = list(range(start, start + span))
+            valid = [i for i in idx if i < T]
+            if not valid:
+                break
+            # right-pad by repeating the last valid frame; mask marks padding
+            pad = span - len(valid)
+            sel = valid + [valid[-1]] * pad
+            mask = np.array([1] * len(valid) + [0] * pad, dtype=np.int64)
+            yield {
+                "task_description": traj["language"],
+                "action": actions[sel],
+                "episode_mask": mask,
+                "images": images[sel],
+                "gripper_images": grip[sel],
+            }
+
     def __iter__(self) -> Iterator[Dict[str, Any]]:
-        raise NotImplementedError("Windowing layer not yet implemented; use iter_trajectories().")
+        rank, world = self._rank_world()
+        flat = (w for traj in self.iter_trajectories() for w in self._windows(traj))
+        for item in itertools.islice(flat, rank, None, world):
+            yield item
+
+    @staticmethod
+    def _rank_world():
+        if dist.is_available() and dist.is_initialized():
+            return dist.get_rank(), dist.get_world_size()
+        return 0, 1
 
     # ---- trajectory layer ------------------------------------------------
     def iter_trajectories(self) -> Iterator[Dict[str, Any]]:
