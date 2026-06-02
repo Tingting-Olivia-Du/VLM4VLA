@@ -130,7 +130,10 @@ class LiberoHDF5Dataset(IterableDataset):
                         actions, self.q01, self.q99, self.norm_mask)
                     yield {
                         "language": str(lang),
-                        "actions": actions,
+                        # float32 to match the original RLDS contract; float64
+                        # would propagate into the loss and break backward
+                        # (RuntimeError: Found dtype Double but expected Float).
+                        "actions": actions.astype(np.float32),
                         "images": agent.astype(np.uint8),
                         "gripper_images": wrist.astype(np.uint8),
                     }

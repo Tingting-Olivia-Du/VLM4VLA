@@ -124,7 +124,11 @@ class RoboQwen25VL(BaseRoboVLM):
         # print("before insert image, attention_mask", attention_mask.shape)
         # print("before insert image, attention_mask", attention_mask)
 
+        # transformers>=5: vision forward returns BaseModelOutputWithPooling;
+        # pooler_output holds the post-merger image tokens (the old bare-tensor
+        # return). Fall back to a bare tensor for older transformers.
         image_embeds = self.vision_tower(pixel_values, grid_thw=image_grid_thw)
+        image_embeds = getattr(image_embeds, "pooler_output", image_embeds)
         n_image_tokens = (input_ids == self.model.config.image_token_id).sum().item()
         n_image_features = image_embeds.shape[0]
         if n_image_tokens != n_image_features:
@@ -443,6 +447,7 @@ if __name__ == "__main__":
     inputs_embeds = model.word_embedding(input_ids)
     inputs.pixel_values = inputs.pixel_values.type(model.vision_tower.dtype)
     image_embeds = model.vision_tower(inputs.pixel_values, grid_thw=inputs.image_grid_thw)
+    image_embeds = getattr(image_embeds, "pooler_output", image_embeds)
     n_image_tokens = (input_ids == model.model.config.image_token_id).sum().item()
     n_image_features = image_embeds.shape[0]
     if n_image_tokens != n_image_features:
