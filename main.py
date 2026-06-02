@@ -145,7 +145,7 @@ def init_trainer_config(configs):
     trainer_config["callbacks"] = [
         init_setup_callback(configs),
         init_lr_monitor_callback(),
-        ModelCheckpoint(dirpath=configs["output_dir"], save_top_k=-1, every_n_epochs=1),
+        ModelCheckpoint(dirpath=configs["output_dir"], save_top_k=1, every_n_train_steps=2000),
     ]
     print("trainer_config: ", trainer_config)
     return trainer_config
