@@ -259,7 +259,11 @@ def generate_chunck_data(data, window_size, chunk_size):
     return data_flatten
 
 
-def get_text_function(tokenizer, tokenizer_type, max_length=256):
+def get_text_function(tokenizer, tokenizer_type, max_length=256,
+                      qwen25_seq_id=None, robot_prompt=None):
+    # qwen25_seq_id/robot_prompt are keyword-only in practice (eval passes them
+    # by keyword) so existing positional callers — get_text_function(tok, type,
+    # max_text_len) — keep working unchanged.
     import functools
 
     if tokenizer_type == "kosmos":
@@ -319,19 +323,12 @@ def get_text_function(tokenizer, tokenizer_type, max_length=256):
                 "<|im_start|><|vision_start|><|image_pad|><|vision_end|><instruction_here_please>\n"
             ]
             tokenizer.padding_side = "right"
-            # use complicate prompt for 0 else 1
-            sample = [(prompt_template[0].replace("<instruction_here_please>", s.strip())) for s in sample]
-            # print(sample)
-            # text = tokenizer(
-            #     sample,
-            #     truncation="only_first",
-            #     return_tensors="pt",
-            #     padding="longest",
-            #     max_length=512,
-            #     add_special_tokens=False,
-            # )
-            # return text["input_ids"], text["attention_mask"]
-
+            # use complicate prompt for 0 else 1 (default 0, matching training)
+            tmpl_idx = qwen25_seq_id if qwen25_seq_id in (0, 1) else 0
+            tmpl = prompt_template[tmpl_idx]
+            if robot_prompt:
+                tmpl = robot_prompt
+            sample = [(tmpl.replace("<instruction_here_please>", s.strip())) for s in sample]
             # for qwen25 use processor to tokenize outside dataloader!!
             return sample, None
 

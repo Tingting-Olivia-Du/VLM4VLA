@@ -10,7 +10,6 @@ from transforms3d.euler import euler2axangle
 
 from vlm4vla.train.base_trainer import BaseTrainer
 from eval.calvin.model_wrapper import CustomModel
-import tensorflow as tf
 
 
 class BaseModelInference(CustomModel):
@@ -38,7 +37,10 @@ class BaseModelInference(CustomModel):
         elif policy_setup == "google_robot":
             unnorm_key = "fractal20220817_data" if unnorm_key is None else unnorm_key
         elif "libero" in policy_setup:
-            unnorm_key = policy_setup + "_no_noops"
+            # Always un-normalize with the TRAINING stats (libero_10), regardless
+            # of which suite we evaluate on — the model learned actions on the
+            # libero_10 q01/q99 scale, so eval must use the same scale.
+            unnorm_key = "libero_10_no_noops" if unnorm_key is None else unnorm_key
         else:
             raise NotImplementedError(
                 f"Policy setup {policy_setup} not supported for octo models. The other datasets can be found in the huggingface config.json file."
@@ -103,8 +105,19 @@ class BaseModelInference(CustomModel):
             bridge_info = json.load(f)
         stat["bridge_orig"] = bridge_info
 
-        with open("configs/data/oxe_dataset_stats/dataset_statistics_libero_10.json", "r") as f:
-            libero_10_info = json.load(f)
+        # Prefer the TRAINING stats (the exact q01/q99 used to normalize action
+        # labels during training, incl. the gripper `mask`). This makes eval's
+        # un-normalization the true inverse of training. Fall back to the bundled
+        # OXE stats if the training cache is missing.
+        train_stats = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "vlm4vla/data/libero_stats/libero_10.json")
+        if os.path.exists(train_stats):
+            with open(train_stats, "r") as f:
+                libero_10_info = json.load(f)
+        else:
+            with open("configs/data/oxe_dataset_stats/dataset_statistics_libero_10.json", "r") as f:
+                libero_10_info = json.load(f)
         stat["libero_10_no_noops"] = libero_10_info
 
         return stat
@@ -151,27 +164,10 @@ class BaseModelInference(CustomModel):
         obs = {}
         obs['rgb_obs'] = {}
         if self.center_crop:
-            batch_size = 1
             crop_scale = 0.9
-
-            # Convert to TF Tensor and record original data type (should be tf.uint8)
-            image = tf.convert_to_tensor(np.array(image))
-            orig_dtype = image.dtype
-
-            # Convert to data type tf.float32 and values between [0,1]
-            image = tf.image.convert_image_dtype(image, tf.float32)
-
-            # Crop and then resize back to original size
-            image = crop_and_resize(image, crop_scale, batch_size)
-
-            # Convert back to original data type
-            image = tf.clip_by_value(image, 0, 1)
-            image = tf.image.convert_image_dtype(image, orig_dtype, saturate=True)
-
-            # Convert back to PIL Image
-            # image = Image.fromarray(image.numpy())
-            # image = image.convert("RGB")
-            image = image.numpy()
+            # Center-crop to crop_scale*area, then resize back. TF-free numpy/cv2
+            # equivalent of the original tf.image.crop_and_resize logic.
+            image = crop_and_resize(np.array(image), crop_scale)
 
         obs["rgb_obs"]['rgb_static'] = image
         action = super().step(obs, goal, execute_step=self.execute_step)
@@ -198,44 +194,32 @@ class BaseModelInference(CustomModel):
         return action.squeeze()
 
 
-def crop_and_resize(image, crop_scale, batch_size):
+def crop_and_resize(image, crop_scale):
     """
     Center-crops an image to have area `crop_scale` * (original image area), and then resizes back
-    to original size. We use the same logic seen in the `dlimp` RLDS datasets wrapper to avoid
-    distribution shift at test time.
+    to 224x224. TF-free numpy/cv2 reimplementation of the original tf.image.crop_and_resize logic
+    (same `dlimp` RLDS center-crop behavior, to avoid test-time distribution shift).
 
     Args:
-        image: TF Tensor of shape (batch_size, H, W, C) or (H, W, C) and datatype tf.float32 with
-               values between [0,1].
+        image: HWC uint8 (or float) numpy array.
         crop_scale: The area of the center crop with respect to the original image.
-        batch_size: Batch size.
+    Returns:
+        HWC uint8 numpy array of size 224x224.
     """
-    # Convert from 3D Tensor (H, W, C) to 4D Tensor (batch_size, H, W, C)
-    assert image.shape.ndims == 3 or image.shape.ndims == 4
-    expanded_dims = False
-    if image.shape.ndims == 3:
-        image = tf.expand_dims(image, axis=0)
-        expanded_dims = True
+    image = np.asarray(image)
+    h, w = image.shape[:2]
 
-    # Get height and width of crop
-    new_heights = tf.reshape(tf.clip_by_value(tf.sqrt(crop_scale), 0, 1), shape=(batch_size,))
-    new_widths = tf.reshape(tf.clip_by_value(tf.sqrt(crop_scale), 0, 1), shape=(batch_size,))
+    # crop side fraction = sqrt(area fraction); matches tf.sqrt(crop_scale)
+    frac = float(np.clip(np.sqrt(crop_scale), 0.0, 1.0))
+    new_h = int(round(h * frac))
+    new_w = int(round(w * frac))
+    top = (h - new_h) // 2
+    left = (w - new_w) // 2
+    cropped = image[top:top + new_h, left:left + new_w]
 
-    # Get bounding box representing crop
-    height_offsets = (1 - new_heights) / 2
-    width_offsets = (1 - new_widths) / 2
-    bounding_boxes = tf.stack(
-        [
-            height_offsets,
-            width_offsets,
-            height_offsets + new_heights,
-            width_offsets + new_widths,
-        ],
-        axis=1,
-    )
-
-    # Crop and then resize back up
-    image = tf.image.crop_and_resize(image, bounding_boxes, tf.range(batch_size), (224, 224))
+    # resize back to 224x224 (bilinear, matching tf.image.crop_and_resize default)
+    resized = cv.resize(cropped, (224, 224), interpolation=cv.INTER_LINEAR)
+    return resized.astype(np.uint8)
 
     # Convert back to 3D Tensor (H, W, C)
     if expanded_dims:

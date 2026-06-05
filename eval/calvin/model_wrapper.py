@@ -141,7 +141,7 @@ class CustomModel:
         else:
             robot_prompt = None
         print('robot_prompt', robot_prompt)
-        self.text_preprocess = get_text_function(self.model.model.tokenizer, configs["model"], qwen25_seq_id, robot_prompt)
+        self.text_preprocess = get_text_function(self.model.model.tokenizer, configs["model"], qwen25_seq_id=qwen25_seq_id, robot_prompt=robot_prompt)
         
         self.action_space = self.configs["act_head"].get("action_space", "continuous")
 

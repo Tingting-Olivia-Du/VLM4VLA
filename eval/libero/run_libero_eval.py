@@ -16,7 +16,6 @@ import tqdm
 from libero.libero import benchmark
 from eval.libero.model_wrapper import BaseModelInference
 from eval.libero.libero_evaluator import libero_evaluator
-import tensorflow as tf
 
 
 def parse_range_tuple(t):
@@ -127,18 +126,16 @@ if __name__ == "__main__":
     #     print("Changing pi0_cfg path")
     #     configs["pi0_cfg"] = configs["pi0_cfg"].replace(old_dir + "/vlm4vla", new_dir + "/VLM4VLA")
 
-    args.model_name = configs["config"].split("/")[-1].split(".")[0]
-    args.model_name += f'_{configs["exp_name"]}'
+    # Build a result name from the config filename + task/exp name. Fall back to
+    # fields that always exist (config_path, task_name) since vla_ablation
+    # configs don't define "config"/"exp_name".
+    args.model_name = os.path.basename(
+        configs.get("config", args.config_path)).split(".")[0]
+    args.model_name += f'_{configs.get("exp_name", configs.get("task_name", ""))}'
     os.environ["DISPLAY"] = ""
     # prevent a single jax process from taking up all the GPU memory
     os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-    gpus = tf.config.list_physical_devices("GPU")
-    if len(gpus) > 0:
-        # prevent a single tf process from taking up all the GPU memory
-        tf.config.set_logical_device_configuration(
-            gpus[0],
-            [tf.config.LogicalDeviceConfiguration(memory_limit=args.tf_memory_limit)],
-        )
+    # (TF GPU-memory limiting removed — eval no longer uses tensorflow.)
 
     from vlm4vla.utils.eval_utils import sort_ckpt
 
